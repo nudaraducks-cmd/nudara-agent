@@ -98,18 +98,18 @@
 <body>
 
     <div id="loading-screen" class="loading-screen">
-        <div class="status-tag">INITIALIZING HANDS-FREE INTERFACE...</div>
+        <div class="status-tag">AWAKENING NUDARA...</div>
     </div>
 
     <div id="ui-layer">
-        <h1>NEURAL_VOICE_v3.1</h1>
+        <h1>NUDARA_CORE_v4.0</h1>
     </div>
 
     <div id="ui-container">
-        <div id="ai-response">Tap the mic once to begin hands-free conversation.</div>
-        <div class="status-tag" id="status-text">SYSTEM READY</div>
+        <div id="ai-response">Initializing...</div>
+        <div class="status-tag" id="status-text">BOOTING</div>
         <div class="input-group">
-            <button id="mic-btn" class="icon-btn" title="Start Conversation">🎤</button>
+            <button id="mic-btn" class="icon-btn" title="Start/Stop Conversation">🎤</button>
         </div>
         <div id="user-transcript" style="font-size: 12px; color: #666; margin-top: 10px;"></div>
     </div>
@@ -121,7 +121,7 @@
         let scene, camera, renderer, particles, originalPositions;
         let analyser, dataArray, audioCtx;
         let isSpeaking = false;
-        let isListeningMode = false; // Tracks if the user wants hands-free mode active
+        let isListeningMode = false;
         const apiKey = ""; // Gemini API Key
         
         const loader = new THREE.GLTFLoader();
@@ -148,11 +148,14 @@
                 (gltf) => {
                     setupParticles(gltf.scene, true);
                     hideLoading();
+                    // සයිට් එකට ආපු ගමන් කතා කරන්න පටන් ගැනීම
+                    setTimeout(autoWakeUp, 1000);
                 },
                 undefined,
                 (err) => {
                     setupParticles(new THREE.IcosahedronGeometry(1.8, 60), false);
                     hideLoading();
+                    setTimeout(autoWakeUp, 1000);
                 }
             );
 
@@ -221,7 +224,7 @@
             renderer.render(scene, camera);
         }
 
-        // --- AI & Voice Logic (FULLY AUTOMATED) ---
+        // --- AI Logic ---
         const micBtn = document.getElementById('mic-btn');
         const statusText = document.getElementById('status-text');
         const aiResponseDiv = document.getElementById('ai-response');
@@ -236,14 +239,10 @@
             }
 
             const utterance = new SpeechSynthesisUtterance(text);
-            
             utterance.onstart = () => { 
                 isSpeaking = true; 
-                statusText.innerText = "TRANSMITTING...";
-                // Ensure recognition is stopped while AI is talking
-                if (recognition) {
-                    try { recognition.stop(); } catch(e) {}
-                }
+                statusText.innerText = "NUDARA TALKING...";
+                if (recognition) try { recognition.stop(); } catch(e) {}
             };
 
             utterance.onend = () => { 
@@ -251,10 +250,8 @@
                 if (isListeningMode) {
                     statusText.innerText = "LISTENING...";
                     setTimeout(() => {
-                        if (isListeningMode && !isSpeaking) {
-                            try { recognition.start(); } catch(e) {}
-                        }
-                    }, 300); // Small delay to avoid hearing itself
+                        if (isListeningMode && !isSpeaking) try { recognition.start(); } catch(e) {}
+                    }, 400);
                 } else {
                     statusText.innerText = "SYSTEM READY";
                 }
@@ -269,21 +266,10 @@
         if (Recognition) {
             recognition = new Recognition();
             recognition.continuous = false;
-            recognition.interimResults = false;
             recognition.lang = 'en-US';
 
             micBtn.onclick = () => {
-                if(!isListeningMode) {
-                    isListeningMode = true;
-                    micBtn.classList.add('active');
-                    statusText.innerText = "LISTENING...";
-                    try { recognition.start(); } catch(e) {}
-                } else {
-                    isListeningMode = false;
-                    micBtn.classList.remove('active');
-                    statusText.innerText = "SYSTEM READY";
-                    try { recognition.stop(); } catch(e) {}
-                }
+                toggleListening();
             };
 
             recognition.onresult = (event) => {
@@ -293,26 +279,38 @@
             };
 
             recognition.onend = () => {
-                // Auto-restart logic: restart only if mode is active and AI isn't speaking
                 if(isListeningMode && !isSpeaking) {
                     setTimeout(() => {
-                        if (isListeningMode && !isSpeaking) {
-                            try { recognition.start(); } catch(e) {}
-                        }
-                    }, 300);
+                        if (isListeningMode && !isSpeaking) try { recognition.start(); } catch(e) {}
+                    }, 400);
                 }
             };
+        }
 
-            recognition.onerror = (event) => {
-                if (event.error === 'no-speech') {
-                    // Silently restart if no speech was detected
-                    if(isListeningMode && !isSpeaking) {
-                        try { recognition.start(); } catch(e) {}
-                    }
-                } else {
-                    console.error("Mic Error:", event.error);
-                }
-            };
+        function toggleListening() {
+            if(!isListeningMode) {
+                isListeningMode = true;
+                micBtn.classList.add('active');
+                statusText.innerText = "LISTENING...";
+                try { recognition.start(); } catch(e) {}
+            } else {
+                isListeningMode = false;
+                micBtn.classList.remove('active');
+                statusText.innerText = "SYSTEM READY";
+                try { recognition.stop(); } catch(e) {}
+            }
+        }
+
+        // Auto Wake Up Function
+        function autoWakeUp() {
+            const welcomeMsg = "Hello, I am Nudara. Your neural assistant. How can I help you today?";
+            aiResponseDiv.innerText = welcomeMsg;
+            speak(welcomeMsg);
+            
+            // AI කතාව ඉවර වුණාම ලෑස්ති පිට ඉන්න mode එකට යනවා
+            setTimeout(() => {
+                if(!isListeningMode) toggleListening();
+            }, 2000);
         }
 
         async function handleAI(prompt) {
@@ -324,14 +322,13 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: `You are a futuristic neural AI agent. Keep answers under 20 words for a fast verbal flow. User says: ${prompt}` }] }]
+                        contents: [{ parts: [{ text: `Your name is Nudara. You are a futuristic neural assistant. Keep answers concise. User says: ${prompt}` }] }]
                     })
                 });
 
                 const data = await response.json();
-                let aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Communication error.";
-                
-                if(data.error) aiText = "Neural brain offline. API Key required.";
+                let aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Communication failure.";
+                if(data.error) aiText = "Neural core offline. Please check API settings.";
 
                 aiResponseDiv.innerText = aiText;
                 speak(aiText);
