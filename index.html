@@ -102,11 +102,11 @@
     </div>
 
     <div id="ui-layer">
-        <h1>NUDARA_CORE_v4.0</h1>
+        <h1>NUDARA_CORE_v5.0</h1>
     </div>
 
     <div id="ui-container">
-        <div id="ai-response">Initializing...</div>
+        <div id="ai-response">Initializing neural link...</div>
         <div class="status-tag" id="status-text">BOOTING</div>
         <div class="input-group">
             <button id="mic-btn" class="icon-btn" title="Start/Stop Conversation">🎤</button>
@@ -122,7 +122,7 @@
         let analyser, dataArray, audioCtx;
         let isSpeaking = false;
         let isListeningMode = false;
-        const apiKey = ""; // Gemini API Key
+        const apiKey = ""; // Built-in environment key will be used
         
         const loader = new THREE.GLTFLoader();
         const modelURL = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
@@ -148,14 +148,13 @@
                 (gltf) => {
                     setupParticles(gltf.scene, true);
                     hideLoading();
-                    // සයිට් එකට ආපු ගමන් කතා කරන්න පටන් ගැනීම
-                    setTimeout(autoWakeUp, 1000);
+                    setTimeout(autoWakeUp, 1500);
                 },
                 undefined,
                 (err) => {
                     setupParticles(new THREE.IcosahedronGeometry(1.8, 60), false);
                     hideLoading();
-                    setTimeout(autoWakeUp, 1000);
+                    setTimeout(autoWakeUp, 1500);
                 }
             );
 
@@ -224,11 +223,38 @@
             renderer.render(scene, camera);
         }
 
-        // --- AI Logic ---
+        // --- AI Logic using Internal Environment ---
         const micBtn = document.getElementById('mic-btn');
         const statusText = document.getElementById('status-text');
         const aiResponseDiv = document.getElementById('ai-response');
         const userTranscriptDiv = document.getElementById('user-transcript');
+
+        async function callGemini(userQuery) {
+            const systemPrompt = "Your name is Nudara. You are a futuristic neural assistant. Always keep your responses very short, helpful, and conversational. Do not use markdown, just plain text.";
+            let delay = 1000;
+            
+            for (let i = 0; i < 5; i++) {
+                try {
+                    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: userQuery }] }],
+                            systemInstruction: { parts: [{ text: systemPrompt }] }
+                        })
+                    });
+                    
+                    if (!response.ok) throw new Error('API Error');
+                    
+                    const result = await response.json();
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "I am processing your request.";
+                } catch (error) {
+                    if (i === 4) throw error;
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    delay *= 2;
+                }
+            }
+        }
 
         async function speak(text) {
             if (!audioCtx) {
@@ -268,9 +294,7 @@
             recognition.continuous = false;
             recognition.lang = 'en-US';
 
-            micBtn.onclick = () => {
-                toggleListening();
-            };
+            micBtn.onclick = () => toggleListening();
 
             recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
@@ -301,16 +325,11 @@
             }
         }
 
-        // Auto Wake Up Function
         function autoWakeUp() {
-            const welcomeMsg = "Hello, I am Nudara. Your neural assistant. How can I help you today?";
+            const welcomeMsg = "Greetings. I am Nudara, your neural assistant. I am now online and ready to converse.";
             aiResponseDiv.innerText = welcomeMsg;
             speak(welcomeMsg);
-            
-            // AI කතාව ඉවර වුණාම ලෑස්ති පිට ඉන්න mode එකට යනවා
-            setTimeout(() => {
-                if(!isListeningMode) toggleListening();
-            }, 2000);
+            setTimeout(() => { if(!isListeningMode) toggleListening(); }, 2000);
         }
 
         async function handleAI(prompt) {
@@ -318,22 +337,11 @@
             aiResponseDiv.innerText = "...";
 
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: `Your name is Nudara. You are a futuristic neural assistant. Keep answers concise. User says: ${prompt}` }] }]
-                    })
-                });
-
-                const data = await response.json();
-                let aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Communication failure.";
-                if(data.error) aiText = "Neural core offline. Please check API settings.";
-
+                const aiText = await callGemini(prompt);
                 aiResponseDiv.innerText = aiText;
                 speak(aiText);
             } catch (err) {
-                aiResponseDiv.innerText = "Neural bridge failed.";
+                aiResponseDiv.innerText = "Neural bridge failed. Please check your connection.";
                 statusText.innerText = "ERROR";
             }
         }
