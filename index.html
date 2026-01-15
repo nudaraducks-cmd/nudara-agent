@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Particle Agent Canvas</title>
     <style>
-        body { margin: 0; overflow: hidden; background: radial-gradient(circle at center, #111 0%, #000 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; overflow: hidden; background: radial-gradient(circle at center, #0a0a0a 0%, #000 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         
         #ui-container {
             position: absolute;
@@ -24,50 +24,53 @@
         .input-group {
             display: flex;
             width: 100%;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(0, 255, 255, 0.2);
+            background: rgba(0, 255, 255, 0.03);
+            border: 1px solid rgba(0, 255, 255, 0.15);
             border-radius: 30px;
             padding: 5px 15px;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(15px);
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
         }
 
         input {
             flex: 1;
             background: none;
             border: none;
-            color: white;
+            color: #0ff;
             padding: 12px;
             outline: none;
             font-size: 16px;
         }
 
         button {
-            background: rgba(0, 255, 255, 0.2);
-            border: none;
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
             color: #0ff;
-            padding: 0 20px;
+            padding: 0 25px;
             border-radius: 20px;
             cursor: pointer;
             transition: 0.3s;
             text-transform: uppercase;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: bold;
+            letter-spacing: 1px;
         }
 
-        button:hover { background: rgba(0, 255, 255, 0.4); }
+        button:hover { background: rgba(0, 255, 255, 0.25); box-shadow: 0 0 10px rgba(0, 255, 255, 0.3); }
 
         .status-tag {
-            background: rgba(0, 255, 255, 0.1);
-            border: 1px solid rgba(0, 255, 255, 0.3);
-            padding: 5px 15px;
+            background: rgba(0, 255, 255, 0.05);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            padding: 5px 18px;
             border-radius: 20px;
-            font-size: 12px;
+            font-size: 11px;
             color: #0ff;
             text-transform: uppercase;
+            letter-spacing: 2px;
         }
 
-        #ui-layer { position: absolute; top: 20px; left: 20px; pointer-events: none; }
-        h1 { margin: 0; font-weight: 200; font-size: 1.2rem; letter-spacing: 4px; color: #0ff; }
+        #ui-layer { position: absolute; top: 25px; left: 25px; pointer-events: none; }
+        h1 { margin: 0; font-weight: 200; font-size: 1rem; letter-spacing: 6px; color: #0ff; text-shadow: 0 0 10px rgba(0,255,255,0.5); }
 
         .loading-screen {
             position: fixed;
@@ -77,26 +80,26 @@
             justify-content: center;
             align-items: center;
             z-index: 100;
-            transition: opacity 1s;
+            transition: opacity 1.2s;
         }
     </style>
 </head>
 <body>
 
     <div id="loading-screen" class="loading-screen">
-        <div class="status-tag">INITIALIZING NEURAL INTERFACE...</div>
+        <div class="status-tag">CALIBRATING NEURAL SENSORS...</div>
     </div>
 
     <div id="ui-layer">
-        <h1>NEURAL AGENT v1.1</h1>
+        <h1>CORE_AI_INTERFACE v1.3</h1>
     </div>
 
     <div id="ui-container">
-        <div id="ai-response" style="font-size: 14px; color: #aaa; margin-bottom: 5px; text-align: center;"></div>
-        <div class="status-tag" id="status-text">SYSTEM READY</div>
+        <div id="ai-response" style="font-size: 13px; color: #00d2d2; margin-bottom: 8px; text-align: center; max-height: 80px; overflow-y: auto; font-style: italic;"></div>
+        <div class="status-tag" id="status-text">SYSTEM ONLINE</div>
         <div class="input-group">
-            <input type="text" id="user-input" placeholder="Ask me something...">
-            <button id="send-btn">Send</button>
+            <input type="text" id="user-input" placeholder="Initiate communication...">
+            <button id="send-btn">Transmit</button>
         </div>
     </div>
 
@@ -109,19 +112,25 @@
         let isSpeaking = false;
         
         const loader = new THREE.GLTFLoader();
-        
-        // GitHub එකට දැම්මම ලැබෙන RAW ලින්ක් එක මෙතනට දාන්න
         const modelURL = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
 
         function init() {
             scene = new THREE.Scene();
-            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 4;
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 4.5;
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // High DPI support
             document.body.appendChild(renderer.domElement);
+
+            // Enhanced Lighting for better depth
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+            
+            const blueLight = new THREE.PointLight(0x00ffff, 1, 100);
+            blueLight.position.set(10, 10, 10);
+            scene.add(blueLight);
 
             loader.load(modelURL, 
                 (gltf) => {
@@ -130,16 +139,18 @@
                 },
                 undefined,
                 (err) => {
-                    console.warn("External model not found, falling back to neural sphere.");
-                    setupParticles(new THREE.IcosahedronGeometry(1.8, 6), false);
+                    console.warn("Using fallback geometry.");
+                    setupParticles(new THREE.IcosahedronGeometry(1.8, 40), false); // High res sphere fallback
                     hideLoading();
                 }
             );
 
-            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-            analyser = audioContext.createAnalyser();
-            analyser.fftSize = 256;
-            dataArray = new Uint8Array(analyser.frequencyBinCount);
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 512;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+            } catch(e) {}
 
             animate();
         }
@@ -147,23 +158,34 @@
         function setupParticles(object, isScene) {
             let geometry;
             if(isScene) {
-                object.traverse(child => { if(child.isMesh) geometry = child.geometry; });
+                object.traverse(child => { 
+                    if(child.isMesh) {
+                        geometry = child.geometry;
+                        child.visible = false; 
+                    }
+                });
             } else {
                 geometry = object;
             }
 
+            if(!geometry) return;
+
             geometry.center();
+            geometry.scale(1.8, 1.8, 1.8);
+
             originalPositions = geometry.attributes.position.array.slice();
             
             const pGeo = new THREE.BufferGeometry();
             pGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(originalPositions), 3));
             
+            // සියුම් කොටස් පෙනෙන්නට size එක 0.007 දක්වා අඩු කළා
             const pMat = new THREE.PointsMaterial({
                 color: 0x00ffff,
-                size: 0.012,
+                size: 0.007, 
                 transparent: true,
-                opacity: 0.7,
-                blending: THREE.AdditiveBlending
+                opacity: 0.9,
+                blending: THREE.AdditiveBlending,
+                sizeAttenuation: true
             });
 
             particles = new THREE.Points(pGeo, pMat);
@@ -172,7 +194,7 @@
 
         function hideLoading() {
             document.getElementById('loading-screen').style.opacity = '0';
-            setTimeout(() => { document.getElementById('loading-screen').style.display = 'none'; }, 1000);
+            setTimeout(() => { document.getElementById('loading-screen').style.display = 'none'; }, 1200);
         }
 
         const clock = new THREE.Clock();
@@ -187,7 +209,7 @@
                 let audioIntensity = 0;
                 if(analyser && isSpeaking) {
                     analyser.getByteFrequencyData(dataArray);
-                    audioIntensity = dataArray.reduce((a, b) => a + b) / dataArray.length / 50; 
+                    audioIntensity = (dataArray.reduce((a, b) => a + b, 0) / dataArray.length) / 45; 
                 }
 
                 for (let i = 0; i < posArray.length; i += 3) {
@@ -195,13 +217,18 @@
                     const oy = originalPositions[i+1];
                     const oz = originalPositions[i+2];
 
-                    const pulse = Math.sin(time * 2 + oy * 5) * (0.01 + audioIntensity);
-                    posArray[i] = ox + pulse;
-                    posArray[i+1] = oy + Math.cos(time * 1.5 + ox * 5) * (0.01 + audioIntensity);
-                    posArray[i+2] = oz + Math.sin(time * 3 + ox * 3) * (0.02 + audioIntensity * 2);
+                    // Subtle neural vibration
+                    const noise = Math.sin(time * 1.5 + oy * 3) * (0.005 + audioIntensity * 0.5);
+                    
+                    posArray[i] = ox + noise;
+                    posArray[i+1] = oy + Math.cos(time * 1.2 + ox * 3) * noise;
+                    posArray[i+2] = oz + Math.sin(time * 2.5 + ox * 2) * (noise * 2);
                 }
                 posAttr.needsUpdate = true;
-                particles.rotation.y = Math.sin(time * 0.1) * 0.1;
+                
+                // Rotation logic
+                particles.rotation.y = Math.sin(time * 0.1) * 0.15;
+                particles.rotation.x = Math.cos(time * 0.05) * 0.05;
             }
             renderer.render(scene, camera);
         }
@@ -211,29 +238,23 @@
         const statusText = document.getElementById('status-text');
 
         async function handleAI() {
-            const text = userInput.value;
+            const text = userInput.value.trim();
             if(!text) return;
-
-            statusText.innerText = "THINKING...";
+            statusText.innerText = "PROCESSING...";
             userInput.value = "";
-
             setTimeout(() => {
-                const response = "I am processing your request on the neural network. How can I assist further?";
+                const response = "Neural synchronization complete. Processing your input within the core.";
                 document.getElementById('ai-response').innerText = response;
                 speak(response);
-            }, 1000);
+            }, 600);
         }
 
         function speak(text) {
+            if (!window.speechSynthesis) return;
+            window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
-            utterance.onstart = () => { 
-                isSpeaking = true; 
-                statusText.innerText = "SPEAKING...";
-            };
-            utterance.onend = () => { 
-                isSpeaking = false; 
-                statusText.innerText = "SYSTEM READY";
-            };
+            utterance.onstart = () => { isSpeaking = true; statusText.innerText = "TRANSMITTING..."; };
+            utterance.onend = () => { isSpeaking = false; statusText.innerText = "SYSTEM ONLINE"; };
             window.speechSynthesis.speak(utterance);
         }
 
