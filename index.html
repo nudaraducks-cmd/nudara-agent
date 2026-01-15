@@ -21,33 +21,34 @@
             z-index: 10;
         }
 
-        /* Overlay to fix Autoplay issues */
         #start-overlay {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
+            background: rgba(0,0,0,0.9);
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             z-index: 200;
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(15px);
         }
 
         .start-btn {
             background: #0ff;
             color: #000;
             border: none;
-            padding: 15px 40px;
-            font-size: 1.2rem;
-            border-radius: 30px;
+            padding: 20px 50px;
+            font-size: 1.4rem;
+            border-radius: 40px;
             cursor: pointer;
             font-weight: bold;
-            letter-spacing: 2px;
-            box-shadow: 0 0 20px #0ff;
+            letter-spacing: 3px;
+            box-shadow: 0 0 30px #0ff;
             transition: 0.3s;
+            margin-bottom: 20px;
         }
 
-        .start-btn:hover { transform: scale(1.1); box-shadow: 0 0 40px #0ff; }
+        .start-btn:hover { transform: scale(1.05); box-shadow: 0 0 50px #0ff; }
 
         .input-group {
             display: flex;
@@ -124,20 +125,21 @@
 </head>
 <body>
 
-    <div id="start-overlay">
-        <button class="start-btn" onclick="startNudara()">START NUDARA</button>
+    <div id="start-overlay" style="display:none;">
+        <button class="start-btn" onclick="startNudara()">ACTIVATE NUDARA</button>
+        <div class="status-tag">SYSTEM READY FOR UPLINK</div>
     </div>
 
     <div id="loading-screen" class="loading-screen">
-        <div class="status-tag">INITIALIZING HANDS-FREE INTERFACE...</div>
+        <div class="status-tag" id="loader-text">SYNCHRONIZING NEURAL CORE...</div>
     </div>
 
     <div id="ui-layer">
-        <h1>NUDARA_CORE_v5.1</h1>
+        <h1>NUDARA_CORE_v5.2</h1>
     </div>
 
     <div id="ui-container">
-        <div id="ai-response">Awaiting activation...</div>
+        <div id="ai-response">System Offline...</div>
         <div class="status-tag" id="status-text">OFFLINE</div>
         <div class="input-group">
             <button id="mic-btn" class="icon-btn" title="Start/Stop Conversation">🎤</button>
@@ -153,10 +155,20 @@
         let analyser, dataArray, audioCtx;
         let isSpeaking = false;
         let isListeningMode = false;
+        let isLoaded = false;
         const apiKey = ""; 
         
         const loader = new THREE.GLTFLoader();
         const modelURL = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
+
+        // Fallback safety: If 3D model takes too long, force load
+        const loadTimeout = setTimeout(() => {
+            if(!isLoaded) {
+                console.log("Model load timed out, using fallback geometry.");
+                setupParticles(new THREE.IcosahedronGeometry(1.8, 60), false);
+                hideLoading();
+            }
+        }, 5000);
 
         function init() {
             scene = new THREE.Scene();
@@ -176,9 +188,17 @@
             scene.add(blueLight);
 
             loader.load(modelURL, 
-                (gltf) => { setupParticles(gltf.scene, true); hideLoading(); },
+                (gltf) => { 
+                    clearTimeout(loadTimeout);
+                    setupParticles(gltf.scene, true); 
+                    hideLoading(); 
+                },
                 undefined,
-                (err) => { setupParticles(new THREE.IcosahedronGeometry(1.8, 60), false); hideLoading(); }
+                (err) => { 
+                    clearTimeout(loadTimeout);
+                    setupParticles(new THREE.IcosahedronGeometry(1.8, 60), false); 
+                    hideLoading(); 
+                }
             );
 
             animate();
@@ -209,11 +229,15 @@
 
             particles = new THREE.Points(pGeo, pMat);
             scene.add(particles);
+            isLoaded = true;
         }
 
         function hideLoading() {
             document.getElementById('loading-screen').style.opacity = '0';
-            setTimeout(() => { document.getElementById('loading-screen').style.display = 'none'; }, 1200);
+            setTimeout(() => { 
+                document.getElementById('loading-screen').style.display = 'none'; 
+                document.getElementById('start-overlay').style.display = 'flex';
+            }, 1000);
         }
 
         function animate() {
@@ -246,7 +270,6 @@
             renderer.render(scene, camera);
         }
 
-        // Fix for AudioContext
         function startNudara() {
             document.getElementById('start-overlay').style.display = 'none';
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -274,7 +297,7 @@
                     });
                     if (!response.ok) throw new Error('API Error');
                     const result = await response.json();
-                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "I am processing.";
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "I am online.";
                 } catch (error) {
                     if (i === 4) throw error;
                     await new Promise(r => setTimeout(r, delay));
@@ -285,8 +308,6 @@
 
         async function speak(text) {
             const utterance = new SpeechSynthesisUtterance(text);
-            
-            // Selecting a clearer voice if possible
             const voices = window.speechSynthesis.getVoices();
             if(voices.length > 0) utterance.voice = voices.find(v => v.lang.includes('en-US')) || voices[0];
 
@@ -303,6 +324,8 @@
                     setTimeout(() => {
                         if (isListeningMode && !isSpeaking) try { recognition.start(); } catch(e) {}
                     }, 500);
+                } else {
+                    statusText.innerText = "SYSTEM READY";
                 }
             };
 
@@ -349,7 +372,7 @@
         }
 
         function autoWakeUp() {
-            const welcomeMsg = "Greetings. I am Nudara, your neural assistant. I am now online. How can I assist you today?";
+            const welcomeMsg = "Neural link established. I am Nudara. How can I assist you today?";
             aiResponseDiv.innerText = welcomeMsg;
             speak(welcomeMsg);
             setTimeout(() => { if(!isListeningMode) toggleListening(); }, 2000);
@@ -363,7 +386,7 @@
                 aiResponseDiv.innerText = aiText;
                 speak(aiText);
             } catch (err) {
-                aiResponseDiv.innerText = "Connection lost.";
+                aiResponseDiv.innerText = "Link failed.";
                 statusText.innerText = "ERROR";
             }
         }
