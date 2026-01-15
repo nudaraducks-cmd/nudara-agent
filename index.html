@@ -102,11 +102,11 @@
     </div>
 
     <div id="ui-layer">
-        <h1>NEURAL_VOICE_v3.0</h1>
+        <h1>NEURAL_VOICE_v3.1</h1>
     </div>
 
     <div id="ui-container">
-        <div id="ai-response">Tap the mic to start our conversation.</div>
+        <div id="ai-response">Tap the mic once to begin hands-free conversation.</div>
         <div class="status-tag" id="status-text">SYSTEM READY</div>
         <div class="input-group">
             <button id="mic-btn" class="icon-btn" title="Start Conversation">🎤</button>
@@ -121,7 +121,7 @@
         let scene, camera, renderer, particles, originalPositions;
         let analyser, dataArray, audioCtx;
         let isSpeaking = false;
-        let isListening = false;
+        let isListeningMode = false; // Tracks if the user wants hands-free mode active
         const apiKey = ""; // Gemini API Key
         
         const loader = new THREE.GLTFLoader();
@@ -221,7 +221,7 @@
             renderer.render(scene, camera);
         }
 
-        // --- AI & Voice Logic (HANDS FREE) ---
+        // --- AI & Voice Logic (FULLY AUTOMATED) ---
         const micBtn = document.getElementById('mic-btn');
         const statusText = document.getElementById('status-text');
         const aiResponseDiv = document.getElementById('ai-response');
@@ -236,16 +236,30 @@
             }
 
             const utterance = new SpeechSynthesisUtterance(text);
+            
             utterance.onstart = () => { 
                 isSpeaking = true; 
                 statusText.innerText = "TRANSMITTING...";
-                if(recognition) recognition.stop(); // Don't listen while speaking
+                // Ensure recognition is stopped while AI is talking
+                if (recognition) {
+                    try { recognition.stop(); } catch(e) {}
+                }
             };
+
             utterance.onend = () => { 
                 isSpeaking = false; 
-                statusText.innerText = "LISTENING...";
-                if(isListening && recognition) recognition.start(); // Resume listening
+                if (isListeningMode) {
+                    statusText.innerText = "LISTENING...";
+                    setTimeout(() => {
+                        if (isListeningMode && !isSpeaking) {
+                            try { recognition.start(); } catch(e) {}
+                        }
+                    }, 300); // Small delay to avoid hearing itself
+                } else {
+                    statusText.innerText = "SYSTEM READY";
+                }
             };
+
             window.speechSynthesis.speak(utterance);
         }
 
@@ -254,20 +268,21 @@
 
         if (Recognition) {
             recognition = new Recognition();
-            recognition.continuous = false; // We handle restart manually for better control
+            recognition.continuous = false;
+            recognition.interimResults = false;
             recognition.lang = 'en-US';
 
             micBtn.onclick = () => {
-                if(!isListening) {
-                    recognition.start();
-                    isListening = true;
+                if(!isListeningMode) {
+                    isListeningMode = true;
                     micBtn.classList.add('active');
                     statusText.innerText = "LISTENING...";
+                    try { recognition.start(); } catch(e) {}
                 } else {
-                    recognition.stop();
-                    isListening = false;
+                    isListeningMode = false;
                     micBtn.classList.remove('active');
                     statusText.innerText = "SYSTEM READY";
+                    try { recognition.stop(); } catch(e) {}
                 }
             };
 
@@ -278,16 +293,24 @@
             };
 
             recognition.onend = () => {
-                // Restart only if we are in listening mode and NOT speaking
-                if(isListening && !isSpeaking) {
-                    recognition.start();
+                // Auto-restart logic: restart only if mode is active and AI isn't speaking
+                if(isListeningMode && !isSpeaking) {
+                    setTimeout(() => {
+                        if (isListeningMode && !isSpeaking) {
+                            try { recognition.start(); } catch(e) {}
+                        }
+                    }, 300);
                 }
             };
 
             recognition.onerror = (event) => {
-                console.error("Mic Error:", event.error);
-                if(event.error === 'no-speech') {
-                    if(isListening && !isSpeaking) recognition.start();
+                if (event.error === 'no-speech') {
+                    // Silently restart if no speech was detected
+                    if(isListeningMode && !isSpeaking) {
+                        try { recognition.start(); } catch(e) {}
+                    }
+                } else {
+                    console.error("Mic Error:", event.error);
                 }
             };
         }
@@ -301,19 +324,19 @@
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        contents: [{ parts: [{ text: `You are a neural AI agent. Keep your answers very short (1-2 sentences) so we can have a fast voice conversation. User says: ${prompt}` }] }]
+                        contents: [{ parts: [{ text: `You are a futuristic neural AI agent. Keep answers under 20 words for a fast verbal flow. User says: ${prompt}` }] }]
                     })
                 });
 
                 const data = await response.json();
-                let aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Connection lost.";
+                let aiText = data.candidates?.[0]?.content?.parts?.[0]?.text || "Communication error.";
                 
-                if(data.error) aiText = "Neural link offline. Configure API key.";
+                if(data.error) aiText = "Neural brain offline. API Key required.";
 
                 aiResponseDiv.innerText = aiText;
                 speak(aiText);
             } catch (err) {
-                aiResponseDiv.innerText = "Communication failure.";
+                aiResponseDiv.innerText = "Neural bridge failed.";
                 statusText.innerText = "ERROR";
             }
         }
