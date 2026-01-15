@@ -135,7 +135,7 @@
     </div>
 
     <div id="ui-layer">
-        <h1>NUDARA_CORE_v5.3</h1>
+        <h1>NUDARA_CORE_v5.4</h1>
     </div>
 
     <div id="ui-container">
@@ -148,6 +148,7 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
     <script>
         let scene, camera, renderer, particles, originalPositions;
@@ -155,6 +156,10 @@
         let isSpeaking = false;
         let isListeningMode = false;
         const apiKey = ""; 
+        
+        const loader = new THREE.GLTFLoader();
+        // Updated model URL (using the previous specific asset)
+        const modelURL = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
 
         function init() {
             scene = new THREE.Scene();
@@ -166,24 +171,43 @@
             renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
             document.body.appendChild(renderer.domElement);
 
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
             
-            const blueLight = new THREE.PointLight(0x00ffff, 1, 100);
+            const blueLight = new THREE.PointLight(0x00ffff, 1.5, 100);
             blueLight.position.set(10, 10, 10);
             scene.add(blueLight);
 
-            // Using procedural geometry directly to avoid loading delays
-            setupParticles(new THREE.IcosahedronGeometry(1.8, 60));
-            
-            // Artificial delay to show loading and then reveal
-            setTimeout(hideLoading, 1500);
+            // Try to load the face model
+            loader.load(modelURL, 
+                (gltf) => { 
+                    setupParticles(gltf.scene, true); 
+                    hideLoading(); 
+                },
+                undefined,
+                (err) => { 
+                    console.warn("Model failed to load, using fallback geometry.");
+                    setupParticles(new THREE.IcosahedronGeometry(1.8, 60), false); 
+                    hideLoading(); 
+                }
+            );
 
             animate();
         }
 
-        function setupParticles(geometry) {
+        function setupParticles(object, isFromScene) {
+            let geometry;
+            if(isFromScene) {
+                object.traverse(child => { if(child.isMesh) { geometry = child.geometry; child.visible = false; } });
+            } else { geometry = object; }
+            
+            if(!geometry) return;
+
             geometry.center();
+            // Scale appropriately for the face model
+            const scaleFactor = isFromScene ? 2.5 : 1.8;
+            geometry.scale(scaleFactor, scaleFactor, scaleFactor);
+            
             originalPositions = geometry.attributes.position.array.slice();
             
             const pGeo = new THREE.BufferGeometry();
@@ -229,7 +253,8 @@
                     const oy = originalPositions[i+1];
                     const oz = originalPositions[i+2];
 
-                    const noise = Math.sin(time * 1.5 + oy * 3) * (0.005 + audioIntensity * 0.6);
+                    // Gentle breathing + voice-reactive distortion
+                    const noise = Math.sin(time * 1.5 + oy * 3) * (0.005 + audioIntensity * 0.5);
                     posArray[i] = ox + noise;
                     posArray[i+1] = oy + Math.cos(time * 1.2 + ox * 3) * noise;
                     posArray[i+2] = oz + Math.sin(time * 2.5 + ox * 2) * (noise * 2);
@@ -247,8 +272,7 @@
             analyser.fftSize = 256;
             dataArray = new Uint8Array(analyser.frequencyBinCount);
             
-            const statusText = document.getElementById('status-text');
-            statusText.innerText = "BOOTING...";
+            document.getElementById('status-text').innerText = "BOOTING...";
             setTimeout(autoWakeUp, 500);
         }
 
@@ -329,15 +353,17 @@
         }
 
         function toggleListening() {
+            const micBtn = document.getElementById('mic-btn');
+            const statusText = document.getElementById('status-text');
             if(!isListeningMode) {
                 isListeningMode = true;
-                document.getElementById('mic-btn').classList.add('active');
-                document.getElementById('status-text').innerText = "LISTENING...";
+                micBtn.classList.add('active');
+                statusText.innerText = "LISTENING...";
                 try { recognition.start(); } catch(e) {}
             } else {
                 isListeningMode = false;
-                document.getElementById('mic-btn').classList.remove('active');
-                document.getElementById('status-text').innerText = "SYSTEM READY";
+                micBtn.classList.remove('active');
+                statusText.innerText = "SYSTEM READY";
                 try { recognition.stop(); } catch(e) {}
             }
         }
