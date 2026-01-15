@@ -21,6 +21,34 @@
             z-index: 10;
         }
 
+        /* Overlay to fix Autoplay issues */
+        #start-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            backdrop-filter: blur(10px);
+        }
+
+        .start-btn {
+            background: #0ff;
+            color: #000;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            border-radius: 30px;
+            cursor: pointer;
+            font-weight: bold;
+            letter-spacing: 2px;
+            box-shadow: 0 0 20px #0ff;
+            transition: 0.3s;
+        }
+
+        .start-btn:hover { transform: scale(1.1); box-shadow: 0 0 40px #0ff; }
+
         .input-group {
             display: flex;
             width: 100%;
@@ -48,7 +76,6 @@
             font-size: 24px;
         }
 
-        .icon-btn:hover { background: rgba(0, 255, 255, 0.3); transform: scale(1.1); }
         .icon-btn.active { background: #f00; color: #fff; border-color: #f00; box-shadow: 0 0 25px #f00; animation: pulse 1.5s infinite; }
 
         @keyframes pulse {
@@ -97,17 +124,21 @@
 </head>
 <body>
 
+    <div id="start-overlay">
+        <button class="start-btn" onclick="startNudara()">START NUDARA</button>
+    </div>
+
     <div id="loading-screen" class="loading-screen">
-        <div class="status-tag">AWAKENING NUDARA...</div>
+        <div class="status-tag">INITIALIZING HANDS-FREE INTERFACE...</div>
     </div>
 
     <div id="ui-layer">
-        <h1>NUDARA_CORE_v5.0</h1>
+        <h1>NUDARA_CORE_v5.1</h1>
     </div>
 
     <div id="ui-container">
-        <div id="ai-response">Initializing neural link...</div>
-        <div class="status-tag" id="status-text">BOOTING</div>
+        <div id="ai-response">Awaiting activation...</div>
+        <div class="status-tag" id="status-text">OFFLINE</div>
         <div class="input-group">
             <button id="mic-btn" class="icon-btn" title="Start/Stop Conversation">🎤</button>
         </div>
@@ -122,7 +153,7 @@
         let analyser, dataArray, audioCtx;
         let isSpeaking = false;
         let isListeningMode = false;
-        const apiKey = ""; // Built-in environment key will be used
+        const apiKey = ""; 
         
         const loader = new THREE.GLTFLoader();
         const modelURL = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
@@ -145,17 +176,9 @@
             scene.add(blueLight);
 
             loader.load(modelURL, 
-                (gltf) => {
-                    setupParticles(gltf.scene, true);
-                    hideLoading();
-                    setTimeout(autoWakeUp, 1500);
-                },
+                (gltf) => { setupParticles(gltf.scene, true); hideLoading(); },
                 undefined,
-                (err) => {
-                    setupParticles(new THREE.IcosahedronGeometry(1.8, 60), false);
-                    hideLoading();
-                    setTimeout(autoWakeUp, 1500);
-                }
+                (err) => { setupParticles(new THREE.IcosahedronGeometry(1.8, 60), false); hideLoading(); }
             );
 
             animate();
@@ -223,14 +246,20 @@
             renderer.render(scene, camera);
         }
 
-        // --- AI Logic using Internal Environment ---
-        const micBtn = document.getElementById('mic-btn');
-        const statusText = document.getElementById('status-text');
-        const aiResponseDiv = document.getElementById('ai-response');
-        const userTranscriptDiv = document.getElementById('user-transcript');
+        // Fix for AudioContext
+        function startNudara() {
+            document.getElementById('start-overlay').style.display = 'none';
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 256;
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
+            
+            statusText.innerText = "BOOTING...";
+            setTimeout(autoWakeUp, 500);
+        }
 
         async function callGemini(userQuery) {
-            const systemPrompt = "Your name is Nudara. You are a futuristic neural assistant. Always keep your responses very short, helpful, and conversational. Do not use markdown, just plain text.";
+            const systemPrompt = "Your name is Nudara. You are a futuristic neural assistant. Always keep your responses very short, helpful, and conversational. Plain text only.";
             let delay = 1000;
             
             for (let i = 0; i < 5; i++) {
@@ -243,28 +272,24 @@
                             systemInstruction: { parts: [{ text: systemPrompt }] }
                         })
                     });
-                    
                     if (!response.ok) throw new Error('API Error');
-                    
                     const result = await response.json();
-                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "I am processing your request.";
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "I am processing.";
                 } catch (error) {
                     if (i === 4) throw error;
-                    await new Promise(resolve => setTimeout(resolve, delay));
+                    await new Promise(r => setTimeout(r, delay));
                     delay *= 2;
                 }
             }
         }
 
         async function speak(text) {
-            if (!audioCtx) {
-                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                analyser = audioCtx.createAnalyser();
-                analyser.fftSize = 256;
-                dataArray = new Uint8Array(analyser.frequencyBinCount);
-            }
-
             const utterance = new SpeechSynthesisUtterance(text);
+            
+            // Selecting a clearer voice if possible
+            const voices = window.speechSynthesis.getVoices();
+            if(voices.length > 0) utterance.voice = voices.find(v => v.lang.includes('en-US')) || voices[0];
+
             utterance.onstart = () => { 
                 isSpeaking = true; 
                 statusText.innerText = "NUDARA TALKING...";
@@ -277,9 +302,7 @@
                     statusText.innerText = "LISTENING...";
                     setTimeout(() => {
                         if (isListeningMode && !isSpeaking) try { recognition.start(); } catch(e) {}
-                    }, 400);
-                } else {
-                    statusText.innerText = "SYSTEM READY";
+                    }, 500);
                 }
             };
 
@@ -306,7 +329,7 @@
                 if(isListeningMode && !isSpeaking) {
                     setTimeout(() => {
                         if (isListeningMode && !isSpeaking) try { recognition.start(); } catch(e) {}
-                    }, 400);
+                    }, 500);
                 }
             };
         }
@@ -326,7 +349,7 @@
         }
 
         function autoWakeUp() {
-            const welcomeMsg = "Greetings. I am Nudara, your neural assistant. I am now online and ready to converse.";
+            const welcomeMsg = "Greetings. I am Nudara, your neural assistant. I am now online. How can I assist you today?";
             aiResponseDiv.innerText = welcomeMsg;
             speak(welcomeMsg);
             setTimeout(() => { if(!isListeningMode) toggleListening(); }, 2000);
@@ -335,13 +358,12 @@
         async function handleAI(prompt) {
             statusText.innerText = "THINKING...";
             aiResponseDiv.innerText = "...";
-
             try {
                 const aiText = await callGemini(prompt);
                 aiResponseDiv.innerText = aiText;
                 speak(aiText);
             } catch (err) {
-                aiResponseDiv.innerText = "Neural bridge failed. Please check your connection.";
+                aiResponseDiv.innerText = "Connection lost.";
                 statusText.innerText = "ERROR";
             }
         }
