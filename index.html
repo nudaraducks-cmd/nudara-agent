@@ -105,11 +105,13 @@
 
     <script>
         let scene, camera, renderer, particles, originalPositions;
-        let analyser, dataArray; // Audio Visualization සඳහා
+        let analyser, dataArray;
         let isSpeaking = false;
         
         const loader = new THREE.GLTFLoader();
-        const modelName = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
+        
+        // GitHub එකට දැම්මම ලැබෙන RAW ලින්ක් එක මෙතනට දාන්න
+        const modelURL = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
 
         function init() {
             scene = new THREE.Scene();
@@ -121,20 +123,19 @@
             renderer.setPixelRatio(window.devicePixelRatio);
             document.body.appendChild(renderer.domElement);
 
-            loader.load(modelName, 
+            loader.load(modelURL, 
                 (gltf) => {
                     setupParticles(gltf.scene, true);
                     hideLoading();
                 },
                 undefined,
                 (err) => {
-                    console.warn("Model not found, using sphere.");
+                    console.warn("External model not found, falling back to neural sphere.");
                     setupParticles(new THREE.IcosahedronGeometry(1.8, 6), false);
                     hideLoading();
                 }
             );
 
-            // Audio Setup (කටහඬට ප්‍රතිචාර දැක්වීමට)
             const audioContext = new (window.AudioContext || window.webkitAudioContext)();
             analyser = audioContext.createAnalyser();
             analyser.fftSize = 256;
@@ -194,7 +195,6 @@
                     const oy = originalPositions[i+1];
                     const oz = originalPositions[i+2];
 
-                    // මූලික චලනය + ශබ්දය අනුව වැඩි වන චලනය (Audio intensity)
                     const pulse = Math.sin(time * 2 + oy * 5) * (0.01 + audioIntensity);
                     posArray[i] = ox + pulse;
                     posArray[i+1] = oy + Math.cos(time * 1.5 + ox * 5) * (0.01 + audioIntensity);
@@ -206,7 +206,6 @@
             renderer.render(scene, camera);
         }
 
-        // --- AI Logic ---
         const sendBtn = document.getElementById('send-btn');
         const userInput = document.getElementById('user-input');
         const statusText = document.getElementById('status-text');
@@ -218,10 +217,8 @@
             statusText.innerText = "THINKING...";
             userInput.value = "";
 
-            // මෙතනට ඔයාගේ AI API එක සම්බන්ධ කරන්න පුළුවන්. 
-            // දැනට අපි mock response එකක් පාවිච්චි කරමු.
             setTimeout(() => {
-                const response = "I am your neural agent. How can I assist you today?";
+                const response = "I am processing your request on the neural network. How can I assist further?";
                 document.getElementById('ai-response').innerText = response;
                 speak(response);
             }, 1000);
@@ -253,4 +250,3 @@
     </script>
 </body>
 </html>
-
