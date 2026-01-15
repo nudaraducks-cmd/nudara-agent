@@ -135,7 +135,7 @@
     </div>
 
     <div id="ui-layer">
-        <h1>NUDARA_CORE_v5.2</h1>
+        <h1>NUDARA_CORE_v5.3</h1>
     </div>
 
     <div id="ui-container">
@@ -148,27 +148,13 @@
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
     <script>
         let scene, camera, renderer, particles, originalPositions;
         let analyser, dataArray, audioCtx;
         let isSpeaking = false;
         let isListeningMode = false;
-        let isLoaded = false;
         const apiKey = ""; 
-        
-        const loader = new THREE.GLTFLoader();
-        const modelURL = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
-
-        // Fallback safety: If 3D model takes too long, force load
-        const loadTimeout = setTimeout(() => {
-            if(!isLoaded) {
-                console.log("Model load timed out, using fallback geometry.");
-                setupParticles(new THREE.IcosahedronGeometry(1.8, 60), false);
-                hideLoading();
-            }
-        }, 5000);
 
         function init() {
             scene = new THREE.Scene();
@@ -187,32 +173,17 @@
             blueLight.position.set(10, 10, 10);
             scene.add(blueLight);
 
-            loader.load(modelURL, 
-                (gltf) => { 
-                    clearTimeout(loadTimeout);
-                    setupParticles(gltf.scene, true); 
-                    hideLoading(); 
-                },
-                undefined,
-                (err) => { 
-                    clearTimeout(loadTimeout);
-                    setupParticles(new THREE.IcosahedronGeometry(1.8, 60), false); 
-                    hideLoading(); 
-                }
-            );
+            // Using procedural geometry directly to avoid loading delays
+            setupParticles(new THREE.IcosahedronGeometry(1.8, 60));
+            
+            // Artificial delay to show loading and then reveal
+            setTimeout(hideLoading, 1500);
 
             animate();
         }
 
-        function setupParticles(object, isScene) {
-            let geometry;
-            if(isScene) {
-                object.traverse(child => { if(child.isMesh) { geometry = child.geometry; child.visible = false; } });
-            } else { geometry = object; }
-            if(!geometry) return;
-
+        function setupParticles(geometry) {
             geometry.center();
-            geometry.scale(1.8, 1.8, 1.8);
             originalPositions = geometry.attributes.position.array.slice();
             
             const pGeo = new THREE.BufferGeometry();
@@ -229,7 +200,6 @@
 
             particles = new THREE.Points(pGeo, pMat);
             scene.add(particles);
-            isLoaded = true;
         }
 
         function hideLoading() {
@@ -277,6 +247,7 @@
             analyser.fftSize = 256;
             dataArray = new Uint8Array(analyser.frequencyBinCount);
             
+            const statusText = document.getElementById('status-text');
             statusText.innerText = "BOOTING...";
             setTimeout(autoWakeUp, 500);
         }
@@ -313,19 +284,19 @@
 
             utterance.onstart = () => { 
                 isSpeaking = true; 
-                statusText.innerText = "NUDARA TALKING...";
+                document.getElementById('status-text').innerText = "NUDARA TALKING...";
                 if (recognition) try { recognition.stop(); } catch(e) {}
             };
 
             utterance.onend = () => { 
                 isSpeaking = false; 
                 if (isListeningMode) {
-                    statusText.innerText = "LISTENING...";
+                    document.getElementById('status-text').innerText = "LISTENING...";
                     setTimeout(() => {
                         if (isListeningMode && !isSpeaking) try { recognition.start(); } catch(e) {}
                     }, 500);
                 } else {
-                    statusText.innerText = "SYSTEM READY";
+                    document.getElementById('status-text').innerText = "SYSTEM READY";
                 }
             };
 
@@ -340,11 +311,11 @@
             recognition.continuous = false;
             recognition.lang = 'en-US';
 
-            micBtn.onclick = () => toggleListening();
+            document.getElementById('mic-btn').onclick = () => toggleListening();
 
             recognition.onresult = (event) => {
                 const transcript = event.results[0][0].transcript;
-                userTranscriptDiv.innerText = "You: " + transcript;
+                document.getElementById('user-transcript').innerText = "You: " + transcript;
                 handleAI(transcript);
             };
 
@@ -360,34 +331,34 @@
         function toggleListening() {
             if(!isListeningMode) {
                 isListeningMode = true;
-                micBtn.classList.add('active');
-                statusText.innerText = "LISTENING...";
+                document.getElementById('mic-btn').classList.add('active');
+                document.getElementById('status-text').innerText = "LISTENING...";
                 try { recognition.start(); } catch(e) {}
             } else {
                 isListeningMode = false;
-                micBtn.classList.remove('active');
-                statusText.innerText = "SYSTEM READY";
+                document.getElementById('mic-btn').classList.remove('active');
+                document.getElementById('status-text').innerText = "SYSTEM READY";
                 try { recognition.stop(); } catch(e) {}
             }
         }
 
         function autoWakeUp() {
             const welcomeMsg = "Neural link established. I am Nudara. How can I assist you today?";
-            aiResponseDiv.innerText = welcomeMsg;
+            document.getElementById('ai-response').innerText = welcomeMsg;
             speak(welcomeMsg);
             setTimeout(() => { if(!isListeningMode) toggleListening(); }, 2000);
         }
 
         async function handleAI(prompt) {
-            statusText.innerText = "THINKING...";
-            aiResponseDiv.innerText = "...";
+            document.getElementById('status-text').innerText = "THINKING...";
+            document.getElementById('ai-response').innerText = "...";
             try {
                 const aiText = await callGemini(prompt);
-                aiResponseDiv.innerText = aiText;
+                document.getElementById('ai-response').innerText = aiText;
                 speak(aiText);
             } catch (err) {
-                aiResponseDiv.innerText = "Link failed.";
-                statusText.innerText = "ERROR";
+                document.getElementById('ai-response').innerText = "Link failed.";
+                document.getElementById('status-text').innerText = "ERROR";
             }
         }
 
