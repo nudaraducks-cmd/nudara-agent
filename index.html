@@ -158,7 +158,6 @@
         const apiKey = ""; 
         
         const loader = new THREE.GLTFLoader();
-        // Updated model URL (using the previous specific asset)
         const modelURL = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
 
         function init() {
@@ -178,7 +177,6 @@
             blueLight.position.set(10, 10, 10);
             scene.add(blueLight);
 
-            // Try to load the face model
             loader.load(modelURL, 
                 (gltf) => { 
                     setupParticles(gltf.scene, true); 
@@ -204,7 +202,6 @@
             if(!geometry) return;
 
             geometry.center();
-            // Scale appropriately for the face model
             const scaleFactor = isFromScene ? 2.5 : 1.8;
             geometry.scale(scaleFactor, scaleFactor, scaleFactor);
             
@@ -253,7 +250,6 @@
                     const oy = originalPositions[i+1];
                     const oz = originalPositions[i+2];
 
-                    // Gentle breathing + voice-reactive distortion
                     const noise = Math.sin(time * 1.5 + oy * 3) * (0.005 + audioIntensity * 0.5);
                     posArray[i] = ox + noise;
                     posArray[i+1] = oy + Math.cos(time * 1.2 + ox * 3) * noise;
@@ -267,12 +263,23 @@
 
         function startNudara() {
             document.getElementById('start-overlay').style.display = 'none';
-            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 256;
-            dataArray = new Uint8Array(analyser.frequencyBinCount);
+            
+            // Critical for Chrome/Safari: AudioContext must resume on user click
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioCtx.createAnalyser();
+                analyser.fftSize = 256;
+                dataArray = new Uint8Array(analyser.frequencyBinCount);
+            } else if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
             
             document.getElementById('status-text').innerText = "BOOTING...";
+            
+            // Attempt to speak immediately to "unlock" speech synthesis
+            const wakeup = new SpeechSynthesisUtterance("");
+            window.speechSynthesis.speak(wakeup);
+            
             setTimeout(autoWakeUp, 500);
         }
 
@@ -292,9 +299,9 @@
                     });
                     if (!response.ok) throw new Error('API Error');
                     const result = await response.json();
-                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "I am online.";
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "I am online and ready.";
                 } catch (error) {
-                    if (i === 4) throw error;
+                    if (i === 4) return "Connection to neural core is unstable.";
                     await new Promise(r => setTimeout(r, delay));
                     delay *= 2;
                 }
@@ -302,9 +309,16 @@
         }
 
         async function speak(text) {
+            // Cancel any current speech
+            window.speechSynthesis.cancel();
+            
             const utterance = new SpeechSynthesisUtterance(text);
             const voices = window.speechSynthesis.getVoices();
-            if(voices.length > 0) utterance.voice = voices.find(v => v.lang.includes('en-US')) || voices[0];
+            
+            // Prefer a female-sounding English voice if possible
+            if(voices.length > 0) {
+                utterance.voice = voices.find(v => v.name.includes('Female') || v.name.includes('Google US English')) || voices[0];
+            }
 
             utterance.onstart = () => { 
                 isSpeaking = true; 
@@ -387,6 +401,9 @@
                 document.getElementById('status-text').innerText = "ERROR";
             }
         }
+
+        // Ensure voices are loaded
+        window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
 
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
