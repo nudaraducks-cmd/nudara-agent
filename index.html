@@ -1,97 +1,256 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>AI Particle Face</title>
-<style>
-  body {
-    margin: 0;
-    background: black;
-    overflow: hidden;
-  }
-  canvas {
-    display: block;
-  }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Particle Agent Canvas</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: radial-gradient(circle at center, #111 0%, #000 100%); color: white; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        #ui-container {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            max-width: 600px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            z-index: 10;
+        }
+
+        .input-group {
+            display: flex;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(0, 255, 255, 0.2);
+            border-radius: 30px;
+            padding: 5px 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        input {
+            flex: 1;
+            background: none;
+            border: none;
+            color: white;
+            padding: 12px;
+            outline: none;
+            font-size: 16px;
+        }
+
+        button {
+            background: rgba(0, 255, 255, 0.2);
+            border: none;
+            color: #0ff;
+            padding: 0 20px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: 0.3s;
+            text-transform: uppercase;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        button:hover { background: rgba(0, 255, 255, 0.4); }
+
+        .status-tag {
+            background: rgba(0, 255, 255, 0.1);
+            border: 1px solid rgba(0, 255, 255, 0.3);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: #0ff;
+            text-transform: uppercase;
+        }
+
+        #ui-layer { position: absolute; top: 20px; left: 20px; pointer-events: none; }
+        h1 { margin: 0; font-weight: 200; font-size: 1.2rem; letter-spacing: 4px; color: #0ff; }
+
+        .loading-screen {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: black;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 1s;
+        }
+    </style>
 </head>
 <body>
 
-<canvas id="canvas"></canvas>
+    <div id="loading-screen" class="loading-screen">
+        <div class="status-tag">INITIALIZING NEURAL INTERFACE...</div>
+    </div>
 
-<script>
-const canvas = document.getElementById("canvas");
-const ctx = canvas.getContext("2d");
+    <div id="ui-layer">
+        <h1>NEURAL AGENT v1.1</h1>
+    </div>
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+    <div id="ui-container">
+        <div id="ai-response" style="font-size: 14px; color: #aaa; margin-bottom: 5px; text-align: center;"></div>
+        <div class="status-tag" id="status-text">SYSTEM READY</div>
+        <div class="input-group">
+            <input type="text" id="user-input" placeholder="Ask me something...">
+            <button id="send-btn">Send</button>
+        </div>
+    </div>
 
-const particles = [];
-const centerX = canvas.width / 2;
-const centerY = canvas.height / 2;
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
-const FACE_RADIUS = 180;
+    <script>
+        let scene, camera, renderer, particles, originalPositions;
+        let analyser, dataArray; // Audio Visualization සඳහා
+        let isSpeaking = false;
+        
+        const loader = new THREE.GLTFLoader();
+        const modelName = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
 
-// Create particles (face shape)
-for (let i = 0; i < 2500; i++) {
-  const angle = Math.random() * Math.PI * 2;
-  const radius = FACE_RADIUS * Math.sqrt(Math.random());
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 4;
 
-  particles.push({
-    x: centerX + Math.cos(angle) * radius,
-    y: centerY + Math.sin(angle) * radius * 1.2,
-    baseX: centerX + Math.cos(angle) * radius,
-    baseY: centerY + Math.sin(angle) * radius * 1.2,
-    size: Math.random() * 2,
-    speed: Math.random() * 0.5 + 0.2
-  });
-}
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
 
-function drawFaceDetails() {
-  // Eyes
-  ctx.fillStyle = "#00ffff";
-  ctx.beginPath();
-  ctx.arc(centerX - 50, centerY - 30, 6, 0, Math.PI * 2);
-  ctx.arc(centerX + 50, centerY - 30, 6, 0, Math.PI * 2);
-  ctx.fill();
-}
+            loader.load(modelName, 
+                (gltf) => {
+                    setupParticles(gltf.scene, true);
+                    hideLoading();
+                },
+                undefined,
+                (err) => {
+                    console.warn("Model not found, using sphere.");
+                    setupParticles(new THREE.IcosahedronGeometry(1.8, 6), false);
+                    hideLoading();
+                }
+            );
 
-function animate() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // Audio Setup (කටහඬට ප්‍රතිචාර දැක්වීමට)
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            analyser = audioContext.createAnalyser();
+            analyser.fftSize = 256;
+            dataArray = new Uint8Array(analyser.frequencyBinCount);
 
-  particles.forEach(p => {
-    p.x += Math.sin(Date.now() * 0.002 + p.x) * 0.3;
-    p.y += Math.cos(Date.now() * 0.002 + p.y) * 0.3;
+            animate();
+        }
 
-    ctx.fillStyle = "white";
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-    ctx.fill();
+        function setupParticles(object, isScene) {
+            let geometry;
+            if(isScene) {
+                object.traverse(child => { if(child.isMesh) geometry = child.geometry; });
+            } else {
+                geometry = object;
+            }
 
-    // return to base
-    p.x += (p.baseX - p.x) * 0.02;
-    p.y += (p.baseY - p.y) * 0.02;
-  });
+            geometry.center();
+            originalPositions = geometry.attributes.position.array.slice();
+            
+            const pGeo = new THREE.BufferGeometry();
+            pGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(originalPositions), 3));
+            
+            const pMat = new THREE.PointsMaterial({
+                color: 0x00ffff,
+                size: 0.012,
+                transparent: true,
+                opacity: 0.7,
+                blending: THREE.AdditiveBlending
+            });
 
-  drawFaceDetails();
-  requestAnimationFrame(animate);
-}
+            particles = new THREE.Points(pGeo, pMat);
+            scene.add(particles);
+        }
 
-animate();
+        function hideLoading() {
+            document.getElementById('loading-screen').style.opacity = '0';
+            setTimeout(() => { document.getElementById('loading-screen').style.display = 'none'; }, 1000);
+        }
 
-// Voice
-function speak(text) {
-  const msg = new SpeechSynthesisUtterance(text);
-  msg.lang = "en-US";
-  msg.pitch = 1;
-  msg.rate = 0.9;
-  window.speechSynthesis.speak(msg);
-}
+        const clock = new THREE.Clock();
+        function animate() {
+            requestAnimationFrame(animate);
+            const time = clock.getElapsedTime();
 
-setTimeout(() => {
-  speak("Hello. I am an artificial intelligence.");
-}, 1000);
-</script>
+            if (particles) {
+                const posAttr = particles.geometry.attributes.position;
+                const posArray = posAttr.array;
+                
+                let audioIntensity = 0;
+                if(analyser && isSpeaking) {
+                    analyser.getByteFrequencyData(dataArray);
+                    audioIntensity = dataArray.reduce((a, b) => a + b) / dataArray.length / 50; 
+                }
 
+                for (let i = 0; i < posArray.length; i += 3) {
+                    const ox = originalPositions[i];
+                    const oy = originalPositions[i+1];
+                    const oz = originalPositions[i+2];
+
+                    // මූලික චලනය + ශබ්දය අනුව වැඩි වන චලනය (Audio intensity)
+                    const pulse = Math.sin(time * 2 + oy * 5) * (0.01 + audioIntensity);
+                    posArray[i] = ox + pulse;
+                    posArray[i+1] = oy + Math.cos(time * 1.5 + ox * 5) * (0.01 + audioIntensity);
+                    posArray[i+2] = oz + Math.sin(time * 3 + ox * 3) * (0.02 + audioIntensity * 2);
+                }
+                posAttr.needsUpdate = true;
+                particles.rotation.y = Math.sin(time * 0.1) * 0.1;
+            }
+            renderer.render(scene, camera);
+        }
+
+        // --- AI Logic ---
+        const sendBtn = document.getElementById('send-btn');
+        const userInput = document.getElementById('user-input');
+        const statusText = document.getElementById('status-text');
+
+        async function handleAI() {
+            const text = userInput.value;
+            if(!text) return;
+
+            statusText.innerText = "THINKING...";
+            userInput.value = "";
+
+            // මෙතනට ඔයාගේ AI API එක සම්බන්ධ කරන්න පුළුවන්. 
+            // දැනට අපි mock response එකක් පාවිච්චි කරමු.
+            setTimeout(() => {
+                const response = "I am your neural agent. How can I assist you today?";
+                document.getElementById('ai-response').innerText = response;
+                speak(response);
+            }, 1000);
+        }
+
+        function speak(text) {
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.onstart = () => { 
+                isSpeaking = true; 
+                statusText.innerText = "SPEAKING...";
+            };
+            utterance.onend = () => { 
+                isSpeaking = false; 
+                statusText.innerText = "SYSTEM READY";
+            };
+            window.speechSynthesis.speak(utterance);
+        }
+
+        sendBtn.addEventListener('click', handleAI);
+        userInput.addEventListener('keypress', (e) => { if(e.key === 'Enter') handleAI(); });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        init();
+    </script>
 </body>
 </html>
 
