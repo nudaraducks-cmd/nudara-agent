@@ -135,7 +135,7 @@
     </div>
 
     <div id="ui-layer">
-        <h1>NUDARA_CORE_v5.4</h1>
+        <h1>NUDARA_CORE_v5.7</h1>
     </div>
 
     <div id="ui-container">
@@ -155,7 +155,9 @@
         let analyser, dataArray, audioCtx;
         let isSpeaking = false;
         let isListeningMode = false;
-        const apiKey = ""; 
+        
+        // YOUR API KEY INTEGRATED BELOW
+        const apiKey = "AIzaSyANnpQshx2JWFbf6mmNi5CnQXWBccAngpM"; 
         
         const loader = new THREE.GLTFLoader();
         const modelURL = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
@@ -264,7 +266,6 @@
         function startNudara() {
             document.getElementById('start-overlay').style.display = 'none';
             
-            // Critical for Chrome/Safari: AudioContext must resume on user click
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioCtx.createAnalyser();
@@ -276,15 +277,15 @@
             
             document.getElementById('status-text').innerText = "BOOTING...";
             
-            // Attempt to speak immediately to "unlock" speech synthesis
-            const wakeup = new SpeechSynthesisUtterance("");
+            const wakeup = new SpeechSynthesisUtterance("System online.");
+            wakeup.volume = 0; 
             window.speechSynthesis.speak(wakeup);
             
-            setTimeout(autoWakeUp, 500);
+            setTimeout(autoWakeUp, 800);
         }
 
         async function callGemini(userQuery) {
-            const systemPrompt = "Your name is Nudara. You are a futuristic neural assistant. Always keep your responses very short, helpful, and conversational. Plain text only.";
+            const systemPrompt = "Your name is Nudara. You are a futuristic neural assistant. Always keep your responses very short (1-2 sentences), helpful, and conversational. Respond in plain English text only.";
             let delay = 1000;
             
             for (let i = 0; i < 5; i++) {
@@ -299,9 +300,9 @@
                     });
                     if (!response.ok) throw new Error('API Error');
                     const result = await response.json();
-                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "I am online and ready.";
+                    return result.candidates?.[0]?.content?.parts?.[0]?.text || "I am online.";
                 } catch (error) {
-                    if (i === 4) return "Connection to neural core is unstable.";
+                    if (i === 4) return "Neural core link unstable. Please try once more.";
                     await new Promise(r => setTimeout(r, delay));
                     delay *= 2;
                 }
@@ -309,16 +310,15 @@
         }
 
         async function speak(text) {
-            // Cancel any current speech
             window.speechSynthesis.cancel();
-            
             const utterance = new SpeechSynthesisUtterance(text);
             const voices = window.speechSynthesis.getVoices();
-            
-            // Prefer a female-sounding English voice if possible
             if(voices.length > 0) {
-                utterance.voice = voices.find(v => v.name.includes('Female') || v.name.includes('Google US English')) || voices[0];
+                const preferred = voices.find(v => (v.name.includes('Female') || v.name.includes('Google US English') || v.name.includes('Zira')) && v.lang.startsWith('en'));
+                utterance.voice = preferred || voices[0];
             }
+            utterance.rate = 1.0;
+            utterance.pitch = 1.1;
 
             utterance.onstart = () => { 
                 isSpeaking = true; 
@@ -332,12 +332,11 @@
                     document.getElementById('status-text').innerText = "LISTENING...";
                     setTimeout(() => {
                         if (isListeningMode && !isSpeaking) try { recognition.start(); } catch(e) {}
-                    }, 500);
+                    }, 400);
                 } else {
                     document.getElementById('status-text').innerText = "SYSTEM READY";
                 }
             };
-
             window.speechSynthesis.speak(utterance);
         }
 
@@ -347,6 +346,7 @@
         if (Recognition) {
             recognition = new Recognition();
             recognition.continuous = false;
+            recognition.interimResults = false;
             recognition.lang = 'en-US';
 
             document.getElementById('mic-btn').onclick = () => toggleListening();
@@ -361,7 +361,7 @@
                 if(isListeningMode && !isSpeaking) {
                     setTimeout(() => {
                         if (isListeningMode && !isSpeaking) try { recognition.start(); } catch(e) {}
-                    }, 500);
+                    }, 400);
                 }
             };
         }
@@ -383,28 +383,21 @@
         }
 
         function autoWakeUp() {
-            const welcomeMsg = "Neural link established. I am Nudara. How can I assist you today?";
+            const welcomeMsg = "Neural link established. I am Nudara. I am powered by your custom API key now.";
             document.getElementById('ai-response').innerText = welcomeMsg;
             speak(welcomeMsg);
-            setTimeout(() => { if(!isListeningMode) toggleListening(); }, 2000);
+            setTimeout(() => { if(!isListeningMode) toggleListening(); }, 2500);
         }
 
         async function handleAI(prompt) {
             document.getElementById('status-text').innerText = "THINKING...";
             document.getElementById('ai-response').innerText = "...";
-            try {
-                const aiText = await callGemini(prompt);
-                document.getElementById('ai-response').innerText = aiText;
-                speak(aiText);
-            } catch (err) {
-                document.getElementById('ai-response').innerText = "Link failed.";
-                document.getElementById('status-text').innerText = "ERROR";
-            }
+            const aiText = await callGemini(prompt);
+            document.getElementById('ai-response').innerText = aiText;
+            speak(aiText);
         }
 
-        // Ensure voices are loaded
         window.speechSynthesis.onvoiceschanged = () => { window.speechSynthesis.getVoices(); };
-
         window.addEventListener('resize', () => {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
