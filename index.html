@@ -135,7 +135,7 @@
     </div>
 
     <div id="ui-layer">
-        <h1>NUDARA_CORE_v5.7</h1>
+        <h1>NUDARA_CORE_v5.8</h1>
     </div>
 
     <div id="ui-container">
@@ -156,7 +156,6 @@
         let isSpeaking = false;
         let isListeningMode = false;
         
-        // YOUR API KEY INTEGRATED BELOW
         const apiKey = "AIzaSyANnpQshx2JWFbf6mmNi5CnQXWBccAngpM"; 
         
         const loader = new THREE.GLTFLoader();
@@ -244,7 +243,8 @@
                 let audioIntensity = 0;
                 if(analyser && isSpeaking) {
                     analyser.getByteFrequencyData(dataArray);
-                    audioIntensity = (dataArray.reduce((a, b) => a + b, 0) / dataArray.length) / 40; 
+                    // Calculate average frequency for lip-sync effect
+                    audioIntensity = (dataArray.reduce((a, b) => a + b, 0) / dataArray.length) / 50; 
                 }
 
                 for (let i = 0; i < posArray.length; i += 3) {
@@ -252,9 +252,20 @@
                     const oy = originalPositions[i+1];
                     const oz = originalPositions[i+2];
 
-                    const noise = Math.sin(time * 1.5 + oy * 3) * (0.005 + audioIntensity * 0.5);
-                    posArray[i] = ox + noise;
-                    posArray[i+1] = oy + Math.cos(time * 1.2 + ox * 3) * noise;
+                    // Identify potential "mouth" area based on Y coordinate (center-bottom)
+                    const isMouthArea = oy < 0.2 && oy > -0.5 && Math.abs(ox) < 0.4;
+                    
+                    let noise = Math.sin(time * 1.5 + oy * 3) * 0.005;
+                    
+                    if (isSpeaking && isMouthArea) {
+                        // Lip sync effect: Move mouth particles more based on audio
+                        noise += Math.sin(time * 15) * (audioIntensity * 0.3);
+                        posArray[i+1] = oy - (audioIntensity * 0.4); // Open mouth downwards
+                    } else {
+                        posArray[i+1] = oy + Math.cos(time * 1.2 + ox * 3) * noise;
+                    }
+
+                    posArray[i] = ox + (isSpeaking && isMouthArea ? Math.sin(time * 20) * 0.01 : noise);
                     posArray[i+2] = oz + Math.sin(time * 2.5 + ox * 2) * (noise * 2);
                 }
                 posAttr.needsUpdate = true;
@@ -383,7 +394,7 @@
         }
 
         function autoWakeUp() {
-            const welcomeMsg = "Neural link established. I am Nudara. I am powered by your custom API key now.";
+            const welcomeMsg = "Neural link established. My face is now reactive to my voice.";
             document.getElementById('ai-response').innerText = welcomeMsg;
             speak(welcomeMsg);
             setTimeout(() => { if(!isListeningMode) toggleListening(); }, 2500);
