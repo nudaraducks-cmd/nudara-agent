@@ -5,8 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nudara Core - Precision Lip Sync</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #000; color: white; font-family: 'Courier New', Courier, monospace; }
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            background: #000; 
+            color: white; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+        }
         
+        /* UI Elements Styling */
         #ui-container {
             position: absolute;
             bottom: 40px;
@@ -22,7 +29,10 @@
 
         #start-overlay {
             position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%;
             background: #000;
             display: flex;
             flex-direction: column;
@@ -45,14 +55,10 @@
             transition: 0.3s;
         }
 
-        .start-btn:hover { background: #0ff; color: #000; box-shadow: 0 0 40px #0ff; }
-
-        .status-tag {
-            font-size: 10px;
-            color: #0ff;
-            margin-top: 15px;
-            letter-spacing: 2px;
-            opacity: 0.7;
+        .start-btn:hover { 
+            background: #0ff; 
+            color: #000; 
+            box-shadow: 0 0 40px #0ff; 
         }
 
         #ai-response {
@@ -60,21 +66,15 @@
             color: #0ff;
             margin-bottom: 20px;
             text-align: center;
-            min-height: 50px;
-            width: 80%;
+            min-height: 60px;
+            width: 85%;
             text-shadow: 0 0 10px rgba(0, 255, 255, 0.8);
-        }
-
-        #status-display {
-            font-size: 12px;
-            color: #555;
-            margin-bottom: 10px;
-            text-transform: uppercase;
+            line-height: 1.4;
         }
 
         .mic-trigger {
-            width: 60px;
-            height: 60px;
+            width: 65px;
+            height: 65px;
             border: 1px solid #333;
             border-radius: 50%;
             display: flex;
@@ -82,25 +82,30 @@
             align-items: center;
             cursor: pointer;
             transition: 0.3s;
+            font-size: 26px;
+            background: rgba(0,0,0,0.5);
         }
 
         .mic-trigger.active {
             border-color: #f00;
-            box-shadow: 0 0 20px #f00;
+            box-shadow: 0 0 25px #f00;
             color: #f00;
         }
     </style>
 </head>
 <body>
 
+    <!-- Initial Loading Screen -->
     <div id="start-overlay">
         <button class="start-btn" onclick="activateSystem()">Initialize Nudara</button>
-        <div class="status-tag">NEURAL LINK PENDING...</div>
+        <div style="margin-top:20px; font-size:11px; color:#0ff; opacity:0.6; letter-spacing: 2px;">
+            NEURAL SYNC INTERFACE v2.5
+        </div>
     </div>
 
+    <!-- Main Interaction UI -->
     <div id="ui-container">
-        <div id="ai-response">READY</div>
-        <div id="status-display">IDLE</div>
+        <div id="ai-response">SYSTEM READY</div>
         <div class="mic-trigger" id="mic-btn">🎤</div>
     </div>
 
@@ -108,15 +113,18 @@
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
 
     <script>
+        // Global variables for the 3D Engine
         let scene, camera, renderer, particles, originalPositions;
         let audioCtx, analyser, dataArray;
         let isSpeaking = false;
         let isListening = false;
-        let mouthWeights = []; // Stores how much each particle should move
+        let mouthWeights = []; 
+        let animationId;
 
-        const apiKey = ""; // API Key is handled by environment
+        const apiKey = ""; 
         const modelURL = 'Meshy_AI_A_high_detailed_symm_0115153513_texture.glb';
 
+        // Initialize the 3D Scene
         function init() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -124,25 +132,35 @@
 
             renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
             document.body.appendChild(renderer.domElement);
 
-            const light = new THREE.DirectionalLight(0xffffff, 1);
-            light.position.set(0, 0, 10);
-            scene.add(light);
+            // Lighting setup for depth
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
 
+            const pointLight = new THREE.PointLight(0x00ffff, 1);
+            pointLight.position.set(5, 5, 5);
+            scene.add(pointLight);
+
+            // Load the 3D Model and convert to Particles
             const loader = new THREE.GLTFLoader();
             loader.load(modelURL, (gltf) => {
                 let mesh;
-                gltf.scene.traverse(child => { if(child.isMesh) mesh = child; });
-                createParticleFace(mesh.geometry);
-                document.getElementById('start-overlay').querySelector('.status-tag').innerText = "SYSTEM LOADED";
+                gltf.scene.traverse(child => { 
+                    if(child.isMesh) mesh = child; 
+                });
+                if(mesh) createParticleFace(mesh.geometry);
             }, undefined, () => {
-                createParticleFace(new THREE.IcosahedronGeometry(2, 60));
+                // Fallback geometry if model fails
+                console.warn("Using fallback geometry.");
+                createParticleFace(new THREE.IcosahedronGeometry(2, 64));
             });
 
             animate();
         }
 
+        // Particle Generation & Lip-Weight Mapping
         function createParticleFace(geometry) {
             geometry.center();
             geometry.scale(2.2, 2.2, 2.2);
@@ -153,119 +171,156 @@
             const pGeo = new THREE.BufferGeometry();
             pGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
             
-            // Calculate weights for each particle based on its position
-            // This ensures only the mouth/jaw area moves significantly
+            mouthWeights = []; 
+            
+            // Map each particle's sensitivity to sound
             for (let i = 0; i < positions.length; i += 3) {
-                const y = positions[i+1];
                 const x = positions[i];
+                const y = positions[i+1];
                 const z = positions[i+2];
-
-                // Influence Map: High value for mouth/chin area, low for eyes/forehead
-                // We focus on Y between -0.8 and 0.1, and X within center
+                
                 let weight = 0;
-                if (y < 0.2 && y > -1.0 && Math.abs(x) < 0.5) {
-                    // Normalize weight: 1.0 at the center of the lips, tapering off
-                    weight = Math.pow(1 - (Math.abs(y + 0.3) / 0.7), 2) * (1 - Math.abs(x) / 0.5);
+                
+                // Detection box for the mouth area
+                const inMouthHeight = (y < 0.1 && y > -0.9);
+                const inMouthWidth = (Math.abs(x) < 0.45);
+                
+                if (inMouthHeight && inMouthWidth) {
+                    // Calculate influence based on proximity to lip center
+                    const verticalDist = Math.abs(y + 0.35) / 0.6;
+                    const horizontalDist = Math.abs(x) / 0.45;
+                    
+                    weight = Math.pow(1 - verticalDist, 2.5) * (1 - horizontalDist);
                 }
+                
                 mouthWeights.push(Math.max(0, weight));
             }
 
             const pMat = new THREE.PointsMaterial({
                 color: 0x00ffff,
-                size: 0.012,
+                size: 0.018,
                 transparent: true,
                 opacity: 0.9,
-                blending: THREE.AdditiveBlending
+                blending: THREE.AdditiveBlending,
+                sizeAttenuation: true
             });
 
             particles = new THREE.Points(pGeo, pMat);
             scene.add(particles);
         }
 
+        // Main Animation Loop
         function animate() {
-            requestAnimationFrame(animate);
+            animationId = requestAnimationFrame(animate);
             const time = performance.now() * 0.001;
 
             if (particles) {
-                const posAttr = particles.geometry.attributes.position;
-                const posArray = posAttr.array;
-                
-                let volume = 0;
-                if (isSpeaking && analyser) {
-                    analyser.getByteFrequencyData(dataArray);
-                    let sum = 0;
-                    for(let i = 0; i < 32; i++) sum += dataArray[i]; // Focus on lower frequencies (vowels)
-                    volume = sum / 32 / 255;
-                }
-
-                for (let i = 0; i < posArray.length; i += 3) {
-                    const idx = i / 3;
-                    const weight = mouthWeights[idx];
-                    
-                    const ox = originalPositions[i];
-                    const oy = originalPositions[i+1];
-                    const oz = originalPositions[i+2];
-
-                    if (weight > 0) {
-                        // Move mouth particles DOWN based on volume and weight
-                        const offset = volume * weight * 0.6; 
-                        posArray[i+1] = oy - offset;
-                        posArray[i+2] = oz + (offset * 0.3); // Slight forward movement for depth
-                        
-                        // Add jitter/vibration for realistic "talking" look
-                        if (volume > 0.1) {
-                            posArray[i] = ox + (Math.sin(time * 50 + i) * 0.005 * weight);
-                        }
-                    } else {
-                        // Subtle idle movement for the rest of the face
-                        posArray[i+1] = oy + Math.sin(time + ox) * 0.005;
-                    }
-                }
-                posAttr.needsUpdate = true;
-                particles.rotation.y = Math.sin(time * 0.2) * 0.05;
+                updateParticlePositions(time);
+                particles.rotation.y = Math.sin(time * 0.15) * 0.06;
             }
+            
             renderer.render(scene, camera);
         }
 
-        function activateSystem() {
+        // Updates each particle based on voice and weight
+        function updateParticlePositions(time) {
+            const posAttr = particles.geometry.attributes.position;
+            const posArray = posAttr.array;
+            
+            let volume = 0;
+            if (isSpeaking && dataArray) {
+                let sum = 0;
+                for(let i = 0; i < 15; i++) sum += dataArray[i]; 
+                volume = (sum / 15 / 255) * 2.0; // Audio Boost
+            }
+
+            for (let i = 0; i < posArray.length; i += 3) {
+                const idx = i / 3;
+                const weight = mouthWeights[idx];
+                
+                const ox = originalPositions[i];
+                const oy = originalPositions[i+1];
+                const oz = originalPositions[i+2];
+
+                if (weight > 0) {
+                    // Lip-Sync Movement (Isolated to Mouth)
+                    const movementAmt = volume * weight * 0.75;
+                    posArray[i+1] = oy - movementAmt;
+                    posArray[i+2] = oz + (movementAmt * 0.35);
+                    
+                    // Speech Jitter
+                    if (volume > 0.1) {
+                        posArray[i] = ox + (Math.sin(time * 55 + i) * 0.005 * weight);
+                    }
+                } else {
+                    // Idle breathing/drift for the rest of the face
+                    posArray[i+1] = oy + Math.sin(time * 1.0 + ox) * 0.003;
+                }
+            }
+            posAttr.needsUpdate = true;
+        }
+
+        // System Activation & Audio Setup
+        async function activateSystem() {
             document.getElementById('start-overlay').style.display = 'none';
+            
             if (!audioCtx) {
                 audioCtx = new (window.AudioContext || window.webkitAudioContext)();
                 analyser = audioCtx.createAnalyser();
                 analyser.fftSize = 256;
                 dataArray = new Uint8Array(analyser.frequencyBinCount);
             }
-            speak("Neural interface synchronized. Focusing all energy on precision speech articulation.");
+            
+            if (audioCtx.state === 'suspended') {
+                await audioCtx.resume();
+            }
+
+            speak("Calibration complete. Neural articulation centers are now isolated.");
             initSpeechRecognition();
         }
 
+        // Speech Synthesis Logic
         function speak(text) {
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(text);
+            
             utterance.onstart = () => { 
                 isSpeaking = true; 
-                document.getElementById('status-display').innerText = "TRANSMITTING...";
                 simulateMouthData();
             };
+            
             utterance.onend = () => { 
                 isSpeaking = false; 
-                document.getElementById('status-display').innerText = isListening ? "LISTENING" : "IDLE";
             };
+            
             window.speechSynthesis.speak(utterance);
         }
 
-        // Simulates audio data since SS is hard to pipe
+        // Simulate frequency data to drive lip movement
         function simulateMouthData() {
             if (!isSpeaking) return;
-            // Generate rhythmic volume changes to mimic speech patterns
-            const vol = 0.4 + Math.sin(Date.now() * 0.015) * 0.4;
-            for(let i=0; i<32; i++) dataArray[i] = vol * 255;
-            requestAnimationFrame(simulateMouthData);
+            
+            const baseFreq = 0.4 + Math.sin(Date.now() * 0.02) * 0.4;
+            const noise = Math.random() * 0.3;
+            const currentVol = Math.min(1.0, baseFreq + noise);
+            
+            if (dataArray) {
+                for(let i=0; i<32; i++) {
+                    dataArray[i] = currentVol * 255;
+                }
+            }
+            
+            // Sync with animation frame
+            setTimeout(() => {
+                requestAnimationFrame(simulateMouthData);
+            }, 30);
         }
 
+        // AI Logic & Mic Input
         function initSpeechRecognition() {
             const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (!Recognition) return;
+            
             const rec = new Recognition();
             rec.lang = 'en-US';
             
@@ -280,21 +335,26 @@
                 processRequest(text);
             };
             
-            rec.onend = () => { if (isListening) rec.start(); };
+            rec.onend = () => { 
+                if (isListening) rec.start(); 
+            };
         }
 
         async function processRequest(text) {
-            document.getElementById('status-display').innerText = "THINKING";
+            document.getElementById('ai-response').innerText = "...";
+            
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: text }] }],
-                    systemInstruction: { parts: [{ text: "Short 1 sentence replies only." }] }
+                    systemInstruction: { parts: [{ text: "Respond in 1 short sentence." }] }
                 })
             });
+            
             const data = await response.json();
             const aiText = data.candidates[0].content.parts[0].text;
+            
             document.getElementById('ai-response').innerText = aiText;
             speak(aiText);
         }
@@ -305,6 +365,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
+        // Bootstrap the app
         init();
     </script>
 </body>
